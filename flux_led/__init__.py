@@ -45,6 +45,9 @@ import colorsys
 from optparse import OptionParser,OptionGroup
 import ast
 import threading
+import math
+
+from typing import Tuple
 
 try:
     import webcolors
@@ -92,7 +95,38 @@ class utils:
         except:
             pass
         return None
+    
+    def _match_max_scale(input_colors: Tuple[int, ...], output_colors: Tuple[int, ...]) -> Tuple[int, ...]:
+        """Match the maximum value of the output to the input."""
+        max_in = max(input_colors)
+        max_out = max(output_colors)
+        if max_out == 0:
+            factor = 0.0
+        else:
+            factor = max_in / max_out
+        return tuple(int(round(i * factor)) for i in output_colors)
 
+    def color_rgb_to_rgbw( r, g, b):
+        """Convert an rgb color to an rgbw representation."""
+        # Calculate the white channel as the minimum of input rgb channels.
+        # Subtract the white portion from the remaining rgb channels.
+        w = min(r, g, b)
+        rgbw = (r - w, g - w, b - w, w)
+
+        # Match the output maximum value to the input. This ensures the full
+        # channel range is used.
+        return utils._match_max_scale((r, g, b), rgbw)
+
+    def color_rgbw_to_rgb(r, g, b, w):
+        """Convert an rgbw color to an rgb representation."""
+        # Add the white channel back into the rgb channels.
+        rgb = (r + w, g + w, b + w)
+
+        # Match the output maximum value to the input. This ensures the the
+        # output doesn't overflow.
+        return utils._match_max_scale((r, g, b, w), rgb)
+
+    
     @staticmethod
     def color_tuple_to_string(rgb):
         # try to convert to an english name
@@ -445,11 +479,11 @@ class LedTimer():
         return txt
 
 class WifiLedBulb():
-    def __init__(self, ipaddr, port=5577, timeout=5):
+    def __init__(self, ipaddr,version = 1, port=5577, timeout=5):
         self.ipaddr = ipaddr
         self.port = port
         self.timeout = timeout
-
+        self.version = version
         self.raw_state = None
         self._is_on = False
         self._mode = None
@@ -636,7 +670,10 @@ class WifiLedBulb():
         msg.append(0x00)
         msg.append(0x00)
         msg.append(int(level))
-        msg.append(0x0f)
+        if self.version == 3:
+            msg.append(0x0f)
+        elif self.version == 1:
+            msg.append(0xf0)
         msg.append(0x0f)
         try:
             self._send_msg(msg)
@@ -646,14 +683,42 @@ class WifiLedBulb():
                 self.setWarmWhite255(level, persist, max(retry-1, 0))
 
     def getRgbw(self):
-        if self.mode != "color":
-            return (255, 255, 255, 255)
         red = self.raw_state[6]
         green = self.raw_state[7]
         blue = self.raw_state[8]
         white = self.raw_state[9]
         return (red, green, blue, white)
+    
+    def setNiceColor(self, r,g,b, brightness=None):
+        if brightness != None:
+            self._brightness = brightness
+            (r,g,b) = self.calcMyBrightness(r,g,b,brightness)
+           
+        (r,g,b,w) = utils.color_rgb_to_rgbw(r,g,b)
+        self.setRgbw(r,g,b,w)
+    
+    def calcMyBrightness(self,r,g,b,brightness):
+        #   brightness 0 - 100
+        red = int(r * (brightness/100))
+        green = int(g * (brightness/100))
+        blue =int( b * (brightness/100))
+        return (red, green, blue)
+    
+    def revertColorWithoutBrightness(self, r,g,b,brightness = 100):
+        red = int((r*100)/brightness)
+        green = int((g*100)/brightness)
+        blue = int((b*100)/brightness)
+        return(red, green, blue)
 
+    def getNiceColor(self):
+        # return(self.raw_state)
+        (r,g,b,w) = self.getRgbw()
+        (red, green, blue) = utils.color_rgbw_to_rgb(r,g,b,w)
+        return self.revertColorWithoutBrightness(red, green, blue, self.brightness)
+        
+
+    
+     
     def setRgbw(self, r,g,b,w, persist=True, brightness=None, retry=2):
         if brightness != None:
             (r, g, b) = self._calculateBrightness((r, g, b), brightness)
@@ -665,8 +730,15 @@ class WifiLedBulb():
         msg.append(int(g))
         msg.append(int(b))
         msg.append(int(w))
+        if self.version == 3:
+            msg.append(0x0f)
+           
+        elif self.version == 1:
+            msg.append(0x00)
+            msg.append(0x00)
+
         msg.append(0x0f)
-        msg.append(0x0f)
+
         try:
             self._send_msg(msg)
         except socket.error:
@@ -693,8 +765,12 @@ class WifiLedBulb():
         msg.append(int(g))
         msg.append(int(b))
         msg.append(0x00)
-        msg.append(0xf0)
-        msg.append(0x0f)
+        if self.version == 3:
+            msg.append(0xf0)
+        elif self.version == 1:
+            msg.append(0x00)
+        # msg.append(0xf0) @todo
+        msg.append(0x00)
         try:
             self._send_msg(msg)
         except socket.error:
