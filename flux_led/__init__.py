@@ -490,7 +490,7 @@ class WifiLedBulb():
         self._rgb = [0, 0, 0]
         self._warm_white = 0
         self._cold_white = 0
-        self._brightness = 0
+        self._brightness = 100
         self._socket = None 
         self._lock = threading.Lock()
 
@@ -704,7 +704,8 @@ class WifiLedBulb():
         blue =int( b * (brightness/100))
         return (red, green, blue)
     
-    def revertColorWithoutBrightness(self, r,g,b,brightness = 100):
+    def revertColorWithoutBrightness(self, r,g,b,brightness):
+        
         red = int((r*100)/brightness)
         green = int((g*100)/brightness)
         blue = int((b*100)/brightness)
