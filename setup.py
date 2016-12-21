@@ -3,9 +3,9 @@ from setuptools import setup
 setup(
     name = 'flux_led',
     packages = ['flux_led'],
-    version = '0.10',
+    version = '0.11',
     description = 'a library to communicate with the flux_led',
-    url='https://github.com/Danielhiversen/flux_led',
+    url='https://github.com/juliangeiges/flux_led',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Other Environment',
