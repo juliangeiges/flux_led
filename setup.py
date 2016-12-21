@@ -1,8 +1,8 @@
 from setuptools import setup
 
 setup(
-    name = 'flux_led',
-    packages = ['flux_led'],
+    name = 'my_flux_led',
+    packages = ['my_flux_led'],
     version = '0.11',
     description = 'a library to communicate with the flux_led',
     url='https://github.com/juliangeiges/flux_led',
